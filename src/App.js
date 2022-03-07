@@ -10,6 +10,8 @@ import FormAnatom from './Anatom/Form'
 import FormRoteiro from './Roteiro'
 import FormMapeamento from './Anatomp'
 import FormPeca from './Peca'
+import FormAnatomeAv from './AnatomAv/Form';
+import formAvaliacao from './Avaliacao/index';
 
 //
 import TelaCorrecao from './TelaCorrecao'
@@ -42,6 +44,7 @@ class App extends Component {
                         <Route exact path="/peca/cadastrar" component={FormPeca} />
                         <Route exact path="/peca/editar/:id" component={FormPeca} />
                         <Route exact path="/pecas" component={ListPecas} />
+                        <Route exact path="/avaliacao/cadastrar" component={formAvaliacao} />
 
                         <Route exact path="/correcao/:id" component={TelaCorrecao} />
                         <Route exact path="/config" component={TelaConfig} />

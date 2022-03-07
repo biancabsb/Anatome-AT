@@ -6,6 +6,7 @@ import Inicio from './Inicio'
 import Peca from './Peca'
 import Roteiro from './Roteiro'
 import Anatomp from './Anatomp'
+import Avaliacao from './Avaliacao'
 import { injectGlobal } from 'styled-components';
 
 
@@ -131,6 +132,11 @@ class App extends Component {
 				onOpenSnackbar={this.onOpenSnackbar}
 				onSetAppState={this.onSetAppState}
 				model={clicked.res == 'anatomp' ? clicked.item : undefined}
+			/>;
+			case 'avaliacao': return <Avaliacao
+				onOpenSnackbar={this.onOpenSnackbar}
+				onSetAppState={this.onSetAppState}
+				model={clicked.res == 'avaliacao' ? clicked.item : undefined}
 			/>;
 		}
 	}

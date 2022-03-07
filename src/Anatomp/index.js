@@ -5,6 +5,8 @@ import { Collapse, Button, Modal, List, Icon } from 'antd';
 import { request, Maybe } from '../utils/data'
 
 import FormGeral from './FormGeral'
+
+
 import FormPecasFisicas from './FormPecasFisicas';
 import FormMapa from './FormMapa';
 
@@ -12,6 +14,7 @@ import { withAppContext } from '../context';
 import Header from '../components/Header';
 
 import { onSave as onSaveAnatomp } from '../Anatomp/utils';
+import FormGeralAvaliacao from './FormGeralAvaliacao';
 
 const { v4: uuidv4 } = require('uuid');
 const Panel = Collapse.Panel;
@@ -171,6 +174,18 @@ class Anatomp extends Component {
                             onSelectRoteiro={this.onSelectRoteiro}
                         />
                     </Panel>
+                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['nome', 'roteiro', 'instituicao'])} contentQ={<p>...</p>} title="Informações gerais do roteiro setado" />} key='geral'>
+                        <FormGeralAvaliacao
+                            {...model}
+                            {...options}
+                            erros={erros}
+                            onChange={this.onChange}
+                            modo={modo}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            isEdit={Maybe(match).bind(m => m.params).bind(p => p.id).maybe(false, i => true)}
+                            onSelectRoteiro={this.onSelectRoteiro}
+                        />
+                    </Panel>
                     <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['pecasFisicas'])} contentQ={<p>...</p>} title="Inclusão das informações das peças anatômicas físicas" />} key='pecaFisica'>
                         <FormPecasFisicas
                             {...model}
@@ -202,6 +217,7 @@ class Anatomp extends Component {
                             onChangePecaFisica={this.onChangePecaFisica}
                         />
                     </Panel>
+                    
                 </Collapse>
                 {
                     modo != 'assoc' && (
