@@ -4,6 +4,7 @@ import { Form, Input, Select, Row, Col } from 'antd';
 import { filter } from '../utils/data'
 
 import Generalidades from '../components/Generalidades'
+import TextArea from 'antd/lib/input/TextArea';
 
 
 const Option = Select.Option;
@@ -15,7 +16,7 @@ const props = {
     wrapperCol: { span: 14 },
 }
 
-const FormGeralAvaliacao = ({ nome, instituicao, modo, roteiro, listaRoteiros, erros, onChange, onSelectRoteiro, isEdit, generalidades, onOpenSnackbar }) => {
+const FormGeral = ({ nome, instituicao, modo, roteiro, listaRoteiros, erros, onChange, onSelectRoteiro, isEdit, generalidades, onOpenSnackbar }) => {
 
     const _erros = {
         nome: erros.campos.indexOf('nome'),
@@ -51,33 +52,58 @@ const FormGeralAvaliacao = ({ nome, instituicao, modo, roteiro, listaRoteiros, e
                         </FormItem>
                     </Col>
                 )}
-                <Col span={span}>
+               
+                <Col span={8}>
                     <FormItem
-                        validateStatus={_erros.nome != -1 ? 'error' : ''}
-                        help={erros.msgs[_erros.nome] || ''}
-                        label='Nome do Roteiro Setado'
+                        validateStatus={_erros.instituicao != -1 ? 'error' : ''}
+                        help={erros.msgs[_erros.instituicao] || ''}
+                        label='Título da Avaliação'
                     >
-                        <Input value={nome} onChange={e => onChange('nome')(e.target.value)} />
+                        <Input placeholder="Informe o titulo da Avaliação" value={instituicao} onChange={e => onChange('instituicao')(e.target.value)} />
                     </FormItem>
                 </Col>
                 <Col span={8}>
                     <FormItem
                         validateStatus={_erros.instituicao != -1 ? 'error' : ''}
                         help={erros.msgs[_erros.instituicao] || ''}
-                        label='Instituição'
+                        label='Subtítulo da Avaliação'
+                    >
+                        <Input placeholder="Informe o subtítulo da Avaliação" value={instituicao} onChange={e => onChange('instituicao')(e.target.value)} />
+                    </FormItem>
+                </Col>
+                       
+            <Col span={span}>
+                    <FormItem
+                        validateStatus={_erros.instituicao != -1 ? 'error' : ''}
+                        help={erros.msgs[_erros.instituicao] || ''}
+                        label='Turma'
                     >
                         <Input value={instituicao} onChange={e => onChange('instituicao')(e.target.value)} />
                     </FormItem>
                 </Col>
-                <Col span={24}>
-                        <FormItem label="Informe as generalidades do roteiro ">
-                            <Generalidades defaultValue={generalidades} onOpenSnackBar={onOpenSnackbar} onChange={onChange('generalidades')} placeholder='Sugestão da ordem das peças a serem aprendidas' />
-                        </FormItem>
-                    </Col>                
+                <Col span={span}>
+                    <FormItem
+                        validateStatus={_erros.instituicao != -1 ? 'error' : ''}
+                        help={erros.msgs[_erros.instituicao] || ''}
+                        label='Disciplina'
+                    >
+                        <Input value={instituicao} onChange={e => onChange('instituicao')(e.target.value)} />
+                    </FormItem>
+                </Col>
+                <Col span={span}>
+                    <FormItem
+                        validateStatus={_erros.instituicao != -1 ? 'error' : ''}
+                        help={erros.msgs[_erros.instituicao] || ''}
+                        label='Instruções'
+                    >
+                        <TextArea value={instituicao} onChange={e => onChange('instituicao')(e.target.value)} />
+                    </FormItem>
+                </Col>
             </Row>
+
         </Form>
     )
 }
 
 
-export default FormGeralAvaliacao;
+export default FormGeral;

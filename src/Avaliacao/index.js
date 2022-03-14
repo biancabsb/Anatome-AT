@@ -1,10 +1,10 @@
 import React, { Component, Fragment } from 'react';
 
-import { Collapse, Button } from 'antd';
+import { Collapse, Button, Modal, List, Icon } from 'antd';
 
 
 import Header from '../components/Header'
-import FormGeralAvaliacao from './FormGeralAvaliacao'
+// import FormGeralAvaliacao from './FormGeralAvaliacao'
 import FormPecasAvaliacao from './FormPecasAvaliacao'
 // import FormTeoria from './FormTeoria'
 
@@ -12,9 +12,60 @@ import { request, Maybe } from '../utils/data'
 import { withAppContext } from '../context';
 
 import { onSave as onSaveRoteiro } from '../Roteiro/utils';
+import FormSetar from './FormSetar';
+// import FormGeral from './FormGeralAvaliacao'
+
+
+import FormPecasFisicas from './FormSetar';
+import FormMapa from './FormMapa';
+
+// import { withAppContext } from '../context';
+// import Header from '../components/Header';
+
+import { onSave as onSaveAnatomp } from '../Avaliacao/utils';
+// import FormGeralAvaliacao from './FormGeralAvaliacao';
 
 
 const Panel = Collapse.Panel;
+const Item = List.Item;
+
+const getModelReferenciaRelativa = () => ({
+    // _id: uuidv4(),
+    referenciaParaReferenciado: '',
+    referenciadoParaReferencia: '',
+    referencia: null,
+})
+
+
+const _modelPecaFisica = {
+    // _id: uuidv4(),
+    nome: '',
+    descricao: '',
+    pecaGenerica: '',
+    midias: [],
+}
+
+const getModelLocalizacao = () => ({
+    // _id: uuidv4(),
+    numero: '',
+    referenciaRelativa: getModelReferenciaRelativa(),
+    pecaFisica: ''
+})
+
+const getModelPonto = () => ({
+    // _id: uuidv4(),
+    label: '',
+    parte: null,
+    x: '',
+    y: '',
+})
+
+const _modelMapa = {
+    parte: null,
+    localizacao: [getModelLocalizacao()],
+    pontos: [getModelPonto()]
+}
+
 
 class Avaliacao extends Component {
 
@@ -26,10 +77,15 @@ class Avaliacao extends Component {
             curso: '',
             disciplina: '',
             partes: [],
+            pecasFisicas: [{ ..._modelPecaFisica }],
             generalidades: [],
             conteudo: {
                 selected: [],
             },
+        },
+        options: {
+            listaRoteiros: [],
+            listaPecasGenericas: []
         },
         pecas: [],
         pecasFlat: [],
@@ -39,6 +95,7 @@ class Avaliacao extends Component {
 
     componentDidMount() {
         const model = Maybe(this.props.history).bind(h => h.location).bind(l => l.state).maybe(false, s => s.model);
+        const { options } = this.state;
 
         if(model){
             this.setState({
@@ -82,11 +139,29 @@ class Avaliacao extends Component {
                     <Button onClick={() => this.props.onPush('/')} size='small' type='primary' ghost>Voltar para página inicial</Button>
                 </div>                
                 <Collapse bordered={false} defaultActiveKey={['geral', 'partes']} >
-                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['idioma', 'nome', 'curso', 'disciplina'])} contentQ={<p>....</p>} title="Informações gerais da avalição" />} key='geral'>
+                   {/*  <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['idioma', 'nome', 'curso', 'disciplina'])} contentQ={<p>....</p>} title="Informações gerais da avalição" />} key='geral'>
                         <FormGeralAvaliacao somentePratica={somentePratica} onChangeSomentePratica={this.onChangeSomentePratica} onOpenSnackbar={this.props.onOpenSnackbar} erros={erros} onChange={this.onChange} {...model} />
-                    </Panel>
+                    </Panel> */}
                     <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['partes'])} contentQ={<p>....</p>} title="Partes Anatômicas" />} key='partes'>
                         <FormPecasAvaliacao onUpdatePecas={this.onGetData} pecas={pecas} erros={erros} onChange={this.onChange} {...model} />
+                    </Panel>
+                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['pecasFisicas'])} contentQ={<p>...</p>} title="Inclusão das informações das peças anatômicas físicas" />} key='pecaFisica'>
+                        <FormSetar
+                            {...model}
+                            // {...options}
+                            isEdit={model.hasOwnProperty('_id')}
+                            erros={erros}
+                            onChange={this.onChange}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            onChangeMidia={this.onChangeMidia}
+                            onAddPecaFisica={this.onAddPecaFisica}
+                            onDeletePecaFisica={this.onDeletePecaFisica}
+                            onChangePecaFisica={this.onChangePecaFisica}
+                            onBlurPecaFisica={this.onBlurPecaFisica}
+                        />
+                        <div style={{ textAlign: 'right', marginBottom: 20, marginRight: 16 }}>
+                            <Button style={{ marginRight: 5 }} onClick={this.onAddPecaFisica} type='primary' ghost icon='plus'>Peça física</Button>
+                        </div>
                     </Panel>
                    {/*  {!somentePratica && <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['conteudo'])} contentQ={<p>....</p>} title="Conhecimento Teórico (CT)" />} key='teoria'>
                         <FormTeoria erros={erros} onChange={this.onChangeConteudoRoteiro} {...model.conteudo} partes={model.partes} conteudoExpandido={conteudoExpandido} />                  
@@ -104,11 +179,11 @@ class Avaliacao extends Component {
         )
     }
 
-    onChangeSomentePratica = somentePratica => this.setState({somentePratica}, () => {
+    /* onChangeSomentePratica = somentePratica => this.setState({somentePratica}, () => {
         if(this.props.onChange){
             this.props.onChange({...this.state.model, somentePratica})            
         }
-    })
+    }) */
 
     onSubmit = () => {
         const {somentePratica} = this.state;
@@ -130,7 +205,58 @@ class Avaliacao extends Component {
             }
         })
     }
+    onGetPecas() {
+        const { onOpenSnackbar } = this.props;
+        const { options } = this.state;
 
+        request('peca', { method: 'GET' })
+            .then(p => {
+                if (p.status == 200) {
+
+                    this.setState({
+                        options: {
+                            ...options,
+                            listaPecasGenericas: p.data
+                        }
+                    })
+                } else {
+                    throw p.error
+                }
+            })
+            .catch(e => {
+                const msg = typeof e === 'string' ? e : 'Falha ao obter os dados da peça';
+                onOpenSnackbar(msg)
+                console.error(e)
+            })
+            .finally(() => this.props.onSetAppState({ loading: false }))
+    }
+    onSelectRoteiro = (partes, model) => {
+
+        const roteiro = this.state.options.listaRoteiros.find(r => r._id == model.roteiro)
+        const extra = roteiro ? {
+            options: {
+                ...this.state.options,
+                listaPecasGenericas: roteiro.pecasGenericas
+            }
+        } : {};
+
+
+        this.setState({
+            model: {
+                ...this.state.model,
+                ...model,
+                mapa: partes.map(p => ({
+                    ..._modelMapa,
+                    parte: p,
+                    localizacao: [{
+                        ...getModelLocalizacao(),
+                        referenciaRelativa: getModelReferenciaRelativa()
+                    }]
+                }))
+            },
+            ...extra
+        })
+    }
 
     onChange = field => value => {
         if(field == 'partes' && !this.props.match){

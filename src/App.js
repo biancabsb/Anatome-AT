@@ -11,7 +11,7 @@ import FormRoteiro from './Roteiro'
 import FormMapeamento from './Anatomp'
 import FormPeca from './Peca'
 import FormAnatomeAv from './AnatomAv/Form';
-import formAvaliacao from './Avaliacao/index';
+import formAvaliacao from './AnatomAv';
 
 //
 import TelaCorrecao from './TelaCorrecao'

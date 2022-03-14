@@ -17,7 +17,7 @@ const props = {
     wrapperCol: { span: 14 },
 }
 
-const FormGeralAvaliacao = ({ nome, curso, disciplina, somentePratica, onChangeSomentePratica, erros, onChange, idioma, generalidades, onOpenSnackbar }) => {
+const FormGeral = ({ nome, curso, disciplina, somentePratica, onChangeSomentePratica, erros, onChange, idioma, generalidades, onOpenSnackbar }) => {
 
     const _erros = {
         idioma: erros.campos.indexOf('idioma'),
@@ -162,4 +162,4 @@ const FormGeralAvaliacao = ({ nome, curso, disciplina, somentePratica, onChangeS
 }
 
 
-export default FormGeralAvaliacao;
+export default FormGeral;

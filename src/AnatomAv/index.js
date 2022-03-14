@@ -1,560 +1,502 @@
-import React, { Component } from 'react';
-import { Input, Modal, Button, Tooltip, Spin, Icon, Collapse, Table, Popover } from 'antd';
-import { withAppContext } from '../context'
+import React, { Component, Fragment } from 'react';
 
-import { request, norm } from '../utils/data'
-import Header from '../components/Header'
+import { Collapse, Button, Modal, List, Icon } from 'antd';
 
-import { listaIdiomas } from '../utils/mock'
+import { request, Maybe } from '../utils/data'
 
-import { getAvaliacao } from "../TelaCorrecao/avaliacao/service";
+import FormGeral from './FormGeral'
 
-const ButtonGroup = Button.Group;
-const Search = Input.Search;
+
+import FormPecasFisicas from './FormPecasFisicas';
+import FormMapa from './FormMapa';
+
+import { withAppContext } from '../context';
+import Header from '../components/Header';
+
+import { onSave as onSaveAnatomp } from '../Anatomp/utils';
+// import FormGeralAvaliacao from './FormGeralAvaliacao';
+
+const { v4: uuidv4 } = require('uuid');
 const Panel = Collapse.Panel;
+const Item = List.Item;
 
-const colsAnatomp = [
-    {
-        title: 'Roteiro',
-        dataIndex: 'nome',
-        key: 'nome',
-    },
-    {
-        title: 'Disciplina',
-        dataIndex: 'roteiro.disciplina',
-        key: 'roteiro.disciplina',
-    },
-    {
-        title: 'Curso',
-        dataIndex: 'roteiro.curso',
-        key: 'roteiro.curso',
-    },
-    {
-        title: 'Instituição',
-        dataIndex: 'instituicao',
-        key: 'instituicao',
-    },
+const getModelReferenciaRelativa = () => ({
+    _id: uuidv4(),
+    referenciaParaReferenciado: '',
+    referenciadoParaReferencia: '',
+    referencia: null,
+})
 
-]
 
-const colsRoteiro = [
-    {
-        title: 'Roteiro',
-        dataIndex: 'nome',
-        key: 'nome',
-    },
-    {
-        title: 'Disciplina',
-        dataIndex: 'disciplina',
-        key: 'disciplina',
-    },
-    {
-        title: 'Curso',
-        dataIndex: 'curso',
-        key: 'curso',
-    },
-    {
-        title: 'Idioma',
-        dataIndex: 'idioma.name',
-        key: 'idioma.name',
-    },
-
-]
-
-const colsAvaliacoes = [
-    {
-        title: 'Avaliação',
-        dataIndex: 'conteudo',
-        key: 'conteudo',
-    },
-    {
-        title: 'Disciplina',
-        dataIndex: 'disciplina',
-        key: 'disciplina',
-    },
-    {
-        title: 'Curso',
-        dataIndex: 'curso',
-        key: 'curso',
-    },
-    {
-        title: 'Instituição',
-        dataIndex: 'instituicao',
-        key: 'instituicao',
-    }
-]
-
-const colsAvaliacoesAplicadas = [
-    {
-        title: 'Avaliação',
-        dataIndex: 'conteudo',
-        key: 'conteudo',
-    },
-    {
-        title: 'Disciplina',
-        dataIndex: 'disciplina',
-        key: 'disciplina',
-    },
-    {
-        title: 'Curso',
-        dataIndex: 'curso',
-        key: 'curso',
-    },
-    {
-        title: 'Instituição',
-        dataIndex: 'instituicao',
-        key: 'instituicao',
-    },
-    {
-        title: 'Aluno',
-        dataIndex: 'nomeAluno',
-        key: 'nomeAluno',
-    },
-]
-
-const Crud = ({ onEdit, onDelete }) => {
-    return (
-        <ButtonGroup>
-            <Tooltip title='Editar'><Button type={'primary'} ghost onClick={onEdit} icon='edit' /></Tooltip>
-            <Tooltip title='Remover'><Button type={'primary'} ghost onClick={onDelete} icon='delete' /></Tooltip>
-        </ButtonGroup>
-    )
+const _modelPecaFisica = {
+    _id: uuidv4(),
+    nome: '',
+    descricao: '',
+    pecaGenerica: '',
+    midias: [],
 }
 
-const CardTitle = ({ children, loading }) =>
-    <div className='anatome-card-title'>{children}{loading ?
-        <Spin size="small" style={{ marginLeft: 5 }} /> : null}</div>
+const getModelLocalizacao = () => ({
+    _id: uuidv4(),
+    numero: '',
+    referenciaRelativa: getModelReferenciaRelativa(),
+    pecaFisica: ''
+})
 
-class Main extends Component {
+const getModelPonto = () => ({
+    _id: uuidv4(),
+    label: '',
+    parte: null,
+    x: '',
+    y: '',
+})
+
+const _modelMapa = {
+    parte: null,
+    localizacao: [getModelLocalizacao()],
+    pontos: [getModelPonto()]
+}
+
+
+class Anatomp extends Component {
+
 
     state = {
-        anatomp: [],
-        roteiros: [],
-        open: false,
-        toDelete: null,
-        resourceToDelete: '',
-        originais: {
-            anatomp: [],
-            roteiros: [],
-            avaliacoesAplicadas: [],
-            avaliacoes: []
-        }
+        model: {
+            nome: this.props.nome,
+            roteiro: this.props.roteiro,
+            instituicao: '',
+            pecasFisicas: [{ ..._modelPecaFisica, _id: uuidv4() }],
+            mapa: [],
+            generalidades: [],
+            tipoPecaMapeamento: 'pecaDigital',
+        },
+        options: {
+            listaRoteiros: [],
+            listaPecasGenericas: []
+        },
     }
 
     componentDidMount() {
-        this.onGetData();
+        const { onOpenSnackbar, partesRoteiro, onChange, onSetAppState, history } = this.props;
+        const { options } = this.state;
+
+        const model = Maybe(history).bind(h => h.location).bind(l => l.state).maybe(false, s => s.model);
+
+        if (onChange) {
+            onChange(this.state.model)
+        }
+
+        this.onSelectRoteiro(partesRoteiro)
+        onSetAppState({ loading: true });
+
+        Promise.all([
+            request('peca', { method: 'GET' }),
+            request('roteiro', { method: 'GET' }),
+        ])
+            .then(([p, roteiros]) => {
+                if (p.status == 200 && roteiros.status == 200) {
+                    const _model = model ? {
+                        model: {
+                            ...model,
+                            roteiro: model.roteiro._id,
+                            mapa: model.mapa.map(m => ({ ...m, localizacao: m.localizacao.map(l => ({ ...l, pecaFisica: l.pecaFisica._id, referenciaRelativa: { ...l.referenciaRelativa, referencia: l.referenciaRelativa.referencia == null ? null : l.referenciaRelativa.referencia._id } })) }))
+                        }
+                    } : {};
+
+                    this.setState({
+                        ..._model,
+                        options: {
+                            ...options,
+                            listaRoteiros: roteiros.data,
+                            listaPecasGenericas: p.data
+                        }
+                    })
+                } else {
+                    throw p.error
+                }
+            })
+            .catch(e => {
+                const msg = typeof e === 'string' ? e : 'Falha ao obter os dados da peça';
+                onOpenSnackbar(msg)
+                console.error(e)
+            })
+            .finally(() => onSetAppState({ loading: false }))
     }
 
-    render() {
-        const { loading, history } = this.props;
-        const { anatomp, roteiros, open, resourceToDelete } = this.state;
 
-        let dadosAval = [];
-        dadosAval.push(getAvaliacao(0));
-        dadosAval.push(getAvaliacao(1));
+
+    componentWillReceiveProps(next) {
+        if (JSON.stringify(this.props.partesRoteiro) != JSON.stringify(next.partesRoteiro)) {
+            this.onSelectRoteiro(next.partesRoteiro)
+        }
+
+        if (this.props.sinalPeca != next.sinalPeca) {
+            this.onGetPecas()
+        }
+    }
+
+
+    componentWillUpdate(nextProps, nextState) {
+        if ((JSON.stringify(this.state.model) != JSON.stringify(nextState.model)) && this.props.onChange) {
+            this.props.onChange(nextState.model)
+        }
+    }
+
+
+    componentWillUnmount() {
+        this.props.onSetAppState({ erros: { campos: [], msgs: [] } })
+    }
+
+
+    render() {
+        const { erros, loading, modo, match } = this.props;
+        const { model, options } = this.state;
+
+        const title = modo == 'assoc' ? 'Associação de peça física' : (match.params.id ? 'Alteração de roteiro setado' : 'Elaborar Avaliação')
 
         return (
             <div style={{ padding: 24 }}>
-                <h2 className='section' style={{ textAlign: 'center', marginTop: 30 }}>Listas de roteiros</h2>
-                <div style={{ textAlign: 'right', marginBottom: 5 }}>
-                    <Popover content={
-                        <div>
-                            <ul>
-                                <li>Listar conteúdos cadastrados;</li>
-                                <li>Cadastrar conteúdo de nova peça;</li>
-                                <li>Ou Editar conteúdo das peças.</li>
-                            </ul>
-                        </div>
-                    }>
-                        <Button size='small' type='primary' ghost onClick={() => history.push('/pecas')}>Ir para
-                            conteúdos das peças</Button>
-                    </Popover>
-                </div>
-                <Collapse bordered={false} defaultActiveKey={['avaliacao_aplicada', 'avaliacao', 'roteiro_digital', 'roteiro_com_peca']}>
-                    <Panel className='anatome-panel' header={
-                        <Header
-                            loading={loading}
-                            contentQ={<p>....</p>}
-                            title={
-                                <Popover placement='right' content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>Lista de p</div>
-                                }>
-                                    Conteúdos dos roteiros
-                                </Popover>
-                            }
-                            extra={
-                                <Popover content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>Cadastrar conteúdo de novo
-                                        roteiro</div>
-                                }>
-                                    <Button type='primary' onClick={() => history.push('/roteiro/cadastrar')}
-                                        style={{ marginRight: 25 }}><Icon type='plus' />Cadastrar roteiro</Button>
-                                </Popover>
-                            }
-                        />}
-                        key='roteiro_digital'>
-                        <div style={{ margin: 10, textAlign: 'right' }}>
-                            <Search
-                                placeholder="Filtrar"
-                                onSearch={this.onFilterRoteiro}
-                                style={{ width: 200, marginRight: 5 }}
-                            />
-                        </div>
-                        <Table
-                            locale={{
-                                emptyText: loading ?
-                                    <Spin /> : <span style={{ color: '#000000A6' }}>Nenhum conteúdo de roteiro foi encontrado para esta busca</span>
-                            }}
-                            columns={[
-                                ...colsRoteiro,
-                                {
-                                    title: '',
-                                    key: 'action',
-                                    width: 100,
-                                    render: (text, item) => <Crud onEdit={() => history.push({
-                                        pathname: '/roteiro/editar/' + item._id,
-                                        state: { model: item }
-                                    })} onDelete={this.onShowDelete('roteiro', item)} />,
-                                }
-                            ]}
-                            rowKey='_id'
-                            pagination={{ style: { textAlign: 'center', width: '100%' } }}
-                            dataSource={roteiros}
+                <h2 className='section' style={{ textAlign: 'center', marginTop: modo == 'assoc' ? 0 : 30 }}>{title}</h2>
+                {modo != 'assoc' && <div style={{ textAlign: 'right', marginBottom: 5 }}>
+                    <Button onClick={() => this.props.history.push('/')} size='small' type='primary' ghost>Voltar para página inicial</Button>
+                </div>}
+                <Collapse bordered={false} defaultActiveKey={['geral', 'pecaFisica', 'mapeamento']} >
+                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['nome', 'roteiro', 'instituicao'])} contentQ={<p>...</p>} title="Informações gerais da Avaliação" />} key='geral'>
+                        <FormGeral
+                            {...model}
+                            {...options}
+                            erros={erros}
+                            onChange={this.onChange}
+                            modo={modo}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            isEdit={Maybe(match).bind(m => m.params).bind(p => p.id).maybe(false, i => true)}
+                            onSelectRoteiro={this.onSelectRoteiro}
                         />
                     </Panel>
-                    <Panel className='anatome-panel' header={
-                        <Header
-                            loading={loading}
-                            contentQ={<p>....</p>}
-                            title={
-                                <Popover placement='right' content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>Roteiros prontos para os estudantes
-                                        usarem no APP Anatome</div>
-                                }>
-                                    Roteiros setados
-                                </Popover>
-                            }
-                            extra={
-                                <Popover content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>Associar o nome das partes anatômicas
-                                        do roteiro à sua localização nas peças</div>
-                                }>
-                                    <Button type='primary' onClick={() => history.push('/mapeamento/cadastrar')}
-                                        style={{ marginRight: 25 }}><Icon type='plus' />Setar localização</Button>
-                                </Popover>
-                            }
-                        />}
-                        key='roteiro_com_peca'>
-                        <div style={{ margin: 10, textAlign: 'right' }}>
-                            <Search
-                                placeholder="Filtrar"
-                                onSearch={this.onFilterAnatomp}
-                                style={{ width: 200, marginRight: 5 }}
-                            />
+                   {/*  <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['nome', 'roteiro', 'instituicao'])} contentQ={<p>...</p>} title="Informações gerais do roteiro setado" />} key='geral'>
+                        <FormGeralAvaliacao
+                            {...model}
+                            {...options}
+                            erros={erros}
+                            onChange={this.onChange}
+                            modo={modo}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            isEdit={Maybe(match).bind(m => m.params).bind(p => p.id).maybe(false, i => true)}
+                            onSelectRoteiro={this.onSelectRoteiro}
+                        />
+                    </Panel> */}
+                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['pecasFisicas'])} contentQ={<p>...</p>} title="Inclusão das informações das peças anatômicas físicas" />} key='pecaFisica'>
+                        <FormPecasFisicas
+                            {...model}
+                            {...options}
+                            isEdit={model.hasOwnProperty('_id')}
+                            erros={erros}
+                            onChange={this.onChange}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            onChangeMidia={this.onChangeMidia}
+                            onAddPecaFisica={this.onAddPecaFisica}
+                            onDeletePecaFisica={this.onDeletePecaFisica}
+                            onChangePecaFisica={this.onChangePecaFisica}
+                            onBlurPecaFisica={this.onBlurPecaFisica}
+                        />
+                        <div style={{ textAlign: 'right', marginBottom: 20, marginRight: 16 }}>
+                            <Button style={{ marginRight: 5 }} onClick={this.onAddPecaFisica} type='primary' ghost icon='plus'>Peça física</Button>
                         </div>
-                        <Table
-                            locale={{
-                                emptyText: loading ?
-                                    <Spin /> : <span style={{ color: '#000000A6' }}>Nenhum roteiro de peça física foi encontrado</span>
-                            }}
-                            columns={[
-                                ...colsAnatomp,
-                                {
-                                    title: '',
-                                    key: 'action',
-                                    width: 100,
-                                    render: (text, item) => <Crud onEdit={() => history.push({
-                                        pathname: '/mapeamento/editar/' + item._id,
-                                        state: { model: item }
-                                    })} onDelete={this.onShowDelete('anatomp', item)} />,
-                                }
-                            ]}
-                            rowKey='_id'
-                            pagination={{ style: { textAlign: 'center', width: '100%' } }}
-                            dataSource={anatomp}
+                    </Panel>
+                    <Panel className='anatome-panel' header={<Header loading={loading} error={this.checkError(['mapa'])} contentQ={<p>...</p>} title="Associação entre o nome e a localização da parte na peça" />} key='mapeamento'>
+                        <FormMapa
+                            {...model}
+                            erros={erros}
+                            onChange={this.onChange}
+                            onChangeMapa={this.onChangeMapa}
+                            onChangeMapaCompleto={this.onChangeMapaCompleto}
+                            onAddPecaFisica={this.onAddPecaFisicaAoMapa}
+                            onRemovePecaFisica={this.onRemovePecaFisicaDoMapa}
+                            onOpenSnackbar={this.props.onOpenSnackbar}
+                            onChangePecaFisica={this.onChangePecaFisica}
                         />
                     </Panel>
-                    <Panel className='anatome-panel' header={
-                        <Header
-                            loading={loading}
-                            contentQ={<p>....</p>}
-                            title={
-                                <Popover placement='right' content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>
-                                        Avaliações a serem submetidas
-                                    </div>
-                                }>
-                                    Avaliação
-                                </Popover>
-                            }
-                            extra={
-                                <Popover content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>
-                                        Cadastrar uma nova avaliação
-                                    </div>
-                                }>
-                                   <Button type='primary' onClick={() => history.push('/avaliacao/cadastrar')}
-                                        style={{ marginRight: 25 }}>
-                                        <Icon type='plus' />Cadastrar avaliação
-                                    </Button>
-                                </Popover>
-                            }
-                        />}
-                        key='avaliacao'>
-                        <div style={{ margin: 10, textAlign: 'right' }}>
-                            <Search
-                                placeholder="Filtrar"
-                                onSearch={this.onFilterAvaliacao}
-                                style={{ width: 200, marginRight: 5 }}
-                            />
-                        </div>
-                        <Table
-                            locale={{
-                                emptyText: loading ?
-                                    <Spin /> : <span style={{ color: '#000000A6' }}>Nenhuma avaliação foi encontrada</span>
-                            }}
-                            columns={[
-                                ...colsAvaliacoes,
-                                {
-                                    title: '',
-                                    key: 'action',
-                                    width: 100,
-                                    render: (text, item) =>
-                                        <Crud onEdit={() =>
-                                            history.push({
-                                                pathname: '/',
-                                                state: { model: item }
-                                            })}
-                                            onDelete={() => { }}
-                                        />,
-                                }
-                            ]}
-                            rowKey='id'
-                            pagination={{ style: { textAlign: 'center', width: '100%' } }}
-                            dataSource={dadosAval}
-                        />
-                    </Panel>
-                    <Panel className='anatome-panel' header={
-                        <Header
-                            loading={loading}
-                            contentQ={<p>....</p>}
-                            title={
-                                <Popover placement='right' content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>
-                                        Avaliações submetidas pelos aluno para serem corrigidas
-                                    </div>
-                                }>
-                                    Avaliações aplicadas
-                                </Popover>
-                            }
-                            extra={
-                                <Popover content={
-                                    <div style={{ width: 300, textAlign: 'center' }}>
-                                        Cadastrar uma nova avaliação aplicada do estudante
-                                    </div>
-                                }>
-                                    <Button type='primary'
-                                        onClick={() => { }}
-                                        style={{ marginRight: 25 }}>
-                                        <Icon type='plus' />Corrigir avaliação
-                                    </Button>
-                                </Popover>
-                            }
-                        />}
-                        key='avaliacao_aplicada'>
-                        <div style={{ margin: 10, textAlign: 'right' }}>
-                            <Search
-                                placeholder="Filtrar"
-                                onSearch={this.onFilterAvaliacaoAplicada}
-                                style={{ width: 200, marginRight: 5 }}
-                            />
-                        </div>
-                        <Table
-                            locale={{
-                                emptyText: loading ?
-                                    <Spin /> : <span style={{ color: '#000000A6' }}>Nenhuma avaliação aplicada foi encontrada</span>
-                            }}
-                            columns={[
-                                ...colsAvaliacoesAplicadas,
-                                {
-                                    title: '',
-                                    key: 'action',
-                                    width: 100,
-                                    render: (text, item) =>
-                                        <Crud onEdit={() =>
-                                            history.push({
-                                                pathname: '/correcao/' + item.id,
-                                                state: { model: item }
-                                            })}
-                                            onDelete={this.onShowDelete('anatomp', item)}
-                                        />,
-                                }
-                            ]}
-                            rowKey='id'
-                            pagination={{ style: { textAlign: 'center', width: '100%' } }}
-                            dataSource={dadosAval}
-                        />
-                    </Panel>
+                    
                 </Collapse>
-                <Modal
-                    title={`Excluir ${resourceToDelete == 'anatomp' ? 'roteiro setado' : 'conteúdo do roteiro'}`}
-                    visible={open}
-                    okText='Excluir'
-                    onOk={this.onDelete}
-                    cancelText='Cancelar'
-                    onCancel={this.onClose}
-                    okButtonProps={{ loading }}
-                    cancelButtonProps={{ loading }}
-                >
-                    {this.onGetBody()}
-                </Modal>
+                {
+                    modo != 'assoc' && (
+                        <div style={{ textAlign: 'center' }}>
+                            <Button style={{ marginRight: 5 }} icon='rollback' onClick={() => this.props.onPush('/')} size='large'>Voltar</Button>
+                            <Button type='primary' icon='check' onClick={this.onSubmit} size='large'>Salvar Avaliação</Button>
+                        </div>
+                    )
+                }
             </div>
         )
     }
 
-    onGetBody = () => {
-        const { toDelete, resourceToDelete } = this.state;
-        if (toDelete !== null) {
-            return <div>Deseja realmente excluir
-                o {resourceToDelete == 'anatomp' ? 'roteiro setado' : 'conteúdo do roteiro'} <span
-                    style={{ fontWeight: 'bold' }}>{toDelete.nome}</span>?</div>
-        } else {
-            return null;
-        }
+    onSubmit = () => {
+        onSaveAnatomp(this.props.onOpenSnackbar, this.props.onSetAppState, this.state.model, ret => {
+            this.props.onOpenSnackbar(`O roteiro setado ${this.state.model.nome} foi salvo com sucesso!`, 'success');
+            this.props.onPush('/')
+        })
     }
 
-    onShowDelete = (resourceToDelete, toDelete) => () => {
-        this.setState({ open: true, toDelete, resourceToDelete })
-    }
+    onGetPecas() {
+        const { onOpenSnackbar } = this.props;
+        const { options } = this.state;
 
-    onClose = () => this.setState({ open: false }, () => {
-        this.setState({ toDelete: null, resourceToDelete: '' })
-    })
+        request('peca', { method: 'GET' })
+            .then(p => {
+                if (p.status == 200) {
 
-
-    onGetData = () => {
-        const { onOpenSnackbar, onSetAppState } = this.props;
-
-        Promise.all([request('anatomp'), request('roteiro')])
-            .then(([anatomp, roteiros]) => {
-
-                const rots = roteiros.data.map(d => ({
-                    ...d,
-                    idioma: listaIdiomas.find(s => s._id == d.idioma),
-                }));
-                this.setState({
-                    anatomp: anatomp.data,
-                    roteiros: rots,
-                    originais: {
-                        anatomp: anatomp.data,
-                        roteiros: rots,
-                    }
-                })
-            })
-            .catch(e => {
-                console.error(e);
-                onOpenSnackbar('Falha ao obter as informações do servidor')
-            })
-            .finally(() => {
-                onSetAppState({ loading: false })
-            })
-    }
-
-
-    onDelete = () => {
-        this.props.onSetAppState({ loading: true })
-        this.props.onOpenSnackbar('Aguarde...', 'loading');
-
-        const model = this.state.resourceToDelete;
-        const id = this.state.toDelete._id;
-
-        const nome = model == 'roteiro' ? 'Conteúdo do roteiro' : 'Roteiro setado';
-
-        request(model + '/' + id, { method: 'DELETE' })
-            .then(ret => {
-                if (ret.status == 200) {
-                    this.props.onOpenSnackbar(nome + ' excluído com sucesso!', 'success');
-                    this.onGetData();
+                    this.setState({
+                        options: {
+                            ...options,
+                            listaPecasGenericas: p.data
+                        }
+                    })
                 } else {
-                    throw ret.error
+                    throw p.error
                 }
             })
             .catch(e => {
-                const msg = typeof e == 'string' ? e : 'Não foi possível excluir o ' + nome.toLowerCase() + ' selecionado';
-                this.props.onOpenSnackbar(msg);
+                const msg = typeof e === 'string' ? e : 'Falha ao obter os dados da peça';
+                onOpenSnackbar(msg)
+                console.error(e)
             })
-            .finally(() => {
-                this.onClose()
-                this.props.onSetAppState({ loading: false })
+            .finally(() => this.props.onSetAppState({ loading: false }))
+    }
+
+    onSelectRoteiro = (partes, model) => {
+
+        const roteiro = this.state.options.listaRoteiros.find(r => r._id == model.roteiro)
+        const extra = roteiro ? {
+            options: {
+                ...this.state.options,
+                listaPecasGenericas: roteiro.pecasGenericas
+            }
+        } : {};
+
+
+        this.setState({
+            model: {
+                ...this.state.model,
+                ...model,
+                mapa: partes.map(p => ({
+                    ..._modelMapa,
+                    parte: p,
+                    localizacao: [{
+                        ...getModelLocalizacao(),
+                        referenciaRelativa: getModelReferenciaRelativa()
+                    }]
+                }))
+            },
+            ...extra
+        })
+    }
+
+    onChangePecaFisica = (field, idx) => value => {
+        const { model } = this.state;
+
+        this.setState({
+            model: {
+                ...model,
+                pecasFisicas: [
+                    ...model.pecasFisicas.slice(0, idx),
+                    { ...model.pecasFisicas[idx], [field]: value },
+                    ...model.pecasFisicas.slice(idx + 1),
+                ]
+            }
+        })
+    }
+
+    onAddPecaFisica = () => {
+        const { pecasFisicas } = this.state.model;
+
+        this.onChange('pecasFisicas')([
+            ...pecasFisicas,
+            { ..._modelPecaFisica, _id: uuidv4() },
+        ])
+    }
+
+    onAddPecaFisicaAoMapa = idx => () => {
+        const { model } = this.state;
+
+        this.setState({
+            model: {
+                ...model,
+                mapa: [
+                    ...model.mapa.slice(0, idx),
+                    {
+                        ...model.mapa[idx],
+                        localizacao: [
+                            getModelLocalizacao(),
+                            ...model.mapa[idx].localizacao
+                        ]
+                    },
+                    ...model.mapa.slice(idx + 1),
+                ]
+            }
+        })
+    }
+
+    onDeletePecaFisica = idx => () => {
+        const { pecasFisicas } = this.state.model;
+
+        if (pecasFisicas.length == 1) {
+            this.onChange('pecasFisicas')([
+                { ..._modelPecaFisica, _id: uuidv4() },
+            ])
+        } else {
+            this.onChange('pecasFisicas')([
+                ...pecasFisicas.slice(0, idx),
+                ...pecasFisicas.slice(idx + 1),
+            ])
+        }
+    }
+
+    onRemovePecaFisicaDoMapa = (idx, idxLoc) => () => {
+        const { model } = this.state;
+
+        this.setState({
+            model: {
+                ...model,
+                mapa: [
+                    ...model.mapa.slice(0, idx),
+                    {
+                        ...model.mapa[idx],
+                        localizacao: [
+                            ...model.mapa[idx].localizacao.slice(0, idxLoc),
+                            ...model.mapa[idx].localizacao.slice(idxLoc + 1),
+                        ]
+                    },
+                    ...model.mapa.slice(idx + 1),
+                ]
+            }
+        })
+    }
+
+    onChangeMapa = (field, idx, idxLoc, extraProps) => value => {
+
+        const { model } = this.state;
+
+        this.setState({
+            model: {
+                ...model,
+                mapa: [
+                    ...model.mapa.slice(0, idx),
+                    {
+                        ...model.mapa[idx],
+                        localizacao: [
+                            ...model.mapa[idx].localizacao.slice(0, idxLoc),
+                            { ...model.mapa[idx].localizacao[idxLoc], ...extraProps, [field]: value },
+                            ...model.mapa[idx].localizacao.slice(idxLoc + 1),
+                        ]
+                    },
+                    ...model.mapa.slice(idx + 1),
+                ]
+            }
+        })
+    }
+
+    onChangeMapaCompleto = (mapaNovo) => {
+        const { model } = this.state;
+        this.setState({
+            model: {
+                ...model,
+                mapa: mapaNovo
+            }
+        })
+    }
+
+    onChangeMapaCompleto = (mapaNovo) => {
+        const { model } = this.state;
+        this.setState({
+            model: {
+                ...model,
+                mapa: mapaNovo
+            }
+        })
+    }
+
+    onBlurPecaFisica = () => {
+        if (!this.state.model.hasOwnProperty('_id')) {
+            const { mapa, pecasFisicas } = this.state.model;
+
+            const pgUtilizadas = pecasFisicas.map(pf => pf.pecaGenerica);
+            const pgUtilizadasUnicas = pgUtilizadas.filter(function (item, pos) {
+                return pgUtilizadas.indexOf(item) == pos;
             })
+
+            const pecasGenericas = pgUtilizadasUnicas.map(idPG => {
+                const dadosPecaGenerica = this.state.options.listaPecasGenericas.find(pg => pg._id == idPG);
+                return { partes: [], ...dadosPecaGenerica, pecasFisicas: pecasFisicas.filter(pf => pf.pecaGenerica == idPG) }
+            });
+
+            const _mapa = mapa.map(m => {
+                const pecaGenerica = pecasGenericas.find(pg => pg.partes.find(p => p._id == m.parte._id) != undefined);
+
+                if (pecaGenerica) {
+                    return {
+                        ...m,
+                        localizacao: pecaGenerica.pecasFisicas.map(pf => ({
+                            ...getModelLocalizacao(),
+                            pecaFisica: pf._id,
+                            referenciaRelativa: getModelReferenciaRelativa()
+                        }))
+                    }
+                } else {
+                    return m
+                }
+            })
+
+            this.setState({ model: { ...this.state.model, mapa: _mapa } })
+        }
     }
 
+    checkError = campos => this.props.erros.campos.find(c => campos.indexOf(c) != -1) != undefined
 
-    onFilterAnatomp = val => {
-        const list = this.state.originais.anatomp;
+    onChange = field => value => this.setState({ model: { ...this.state.model, [field]: value } })
 
-        const _val = norm(val);
+    onRemoveParte = _id => () => {
+        const { onOpenSnackbar } = this.props;
+        const { model } = this.state;
 
-        const _list = list.filter(p => {
-            return (
-                norm(p.nome).indexOf(_val) != -1 ||
-                norm(p.instituicao).indexOf(_val) != -1 ||
-                norm(p.roteiro.curso).indexOf(_val) != -1 ||
-                norm(p.roteiro.disciplina).indexOf(_val) != -1
-            )
-        });
+        const isUsed = model.conteudoTeorico.find(ct => ct.partes.indexOf(_id) != -1)
 
-        this.setState({ anatomp: _list })
+        if (isUsed) {
+            onOpenSnackbar('Não é possível excluir partes associadas a algum conteúdo teórico', 'warning');
+        } else {
+            this.setState({
+                model: {
+                    ...model,
+                    partes: model.partes.filter(p => p._id != _id),
+                }
+            })
+        }
     }
 
-    onFilterRoteiro = val => {
-        const list = this.state.originais.roteiros;
+    onChangeParte = (idx, nome) => {
+        const { model } = this.state;
 
-        const _val = norm(val);
-
-        const _list = list.filter(p => {
-            return (
-                norm(p.nome).indexOf(_val) != -1 ||
-                norm(p.curso).indexOf(_val) != -1 ||
-                norm(p.disciplina).indexOf(_val) != -1
-            )
-        });
-
-        this.setState({ roteiros: _list })
+        this.setState({
+            model: {
+                ...model,
+                partes: [
+                    ...model.partes.slice(0, idx),
+                    { ...model.partes[idx], nome },
+                    ...model.partes.slice(idx + 1),
+                ]
+            }
+        })
     }
 
-    onFilterAvaliacaoAplicada = val => {
-        const list = this.state.originais.avaliacoesAplicadas;
-
-        const _val = norm(val);
-
-        const _list = list.filter(p => {
-            return (
-                norm(p.nome).indexOf(_val) !== -1 ||
-                norm(p.disciplina).indexOf(_val) !== -1 ||
-                norm(p.curso).indexOf(_val) !== -1 ||
-                norm(p.instituicao).indexOf(_val) !== -1
-            )
-        });
-
-        this.setState({ roteiros: _list })
-    }
-
-    onFilterAvaliacao = val => {
-        const list = this.state.originais.avaliacoes;
-
-        const _val = norm(val);
-
-        const _list = list.filter(p => {
-            return (
-                norm(p.conteudo).indexOf(_val) !== -1 ||
-                norm(p.disciplina).indexOf(_val) !== -1 ||
-                norm(p.curso).indexOf(_val) !== -1 ||
-                norm(p.instituicao).indexOf(_val) !== -1
-            )
-        });
-        this.setState({ roteiros: _list })
-    }
 }
 
-export default withAppContext(Main);
+Anatomp.defaultProps = {
+    partesRoteiro: [],
+    modo: '',
+    nome: '',
+    roteiro: '',
+    sinalPeca: ''
+}
+
+
+export default withAppContext(Anatomp)
